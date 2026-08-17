@@ -270,7 +270,7 @@ class AppState {
       if (lng) record.lng = lng;
       if (dist !== undefined) record.dist = dist;
     }
-    this.save();
+    this.save('CLOCK_IN', record);
   }
 
   clockOut(userId, dist, lat, lng) {
@@ -284,7 +284,7 @@ class AppState {
       if (lat) record.lat = lat;
       if (lng) record.lng = lng;
       if (dist !== undefined) record.dist = dist;
-      this.save();
+      this.save('CLOCK_OUT', record);
     }
   }
 
@@ -292,14 +292,14 @@ class AppState {
     req.id = 'lv_' + Date.now();
     req.status = 'pending';
     this.leaveRequests.unshift(req);
-    this.save();
+    this.save('ADD_LEAVE', req);
   }
 
   updateLeaveStatus(leaveId, newStatus) {
     const item = this.leaveRequests.find(l => l.id === leaveId);
     if (item) {
       item.status = newStatus;
-      this.save();
+      this.save('UPDATE_LEAVE_STATUS', { id: leaveId, status: newStatus });
     }
   }
 
@@ -307,7 +307,7 @@ class AppState {
     task.id = 't_' + Date.now();
     task.progressPct = task.status === 'done' ? 100 : (task.status === 'in_progress' ? 50 : 0);
     this.tasks.push(task);
-    this.save();
+    this.save('ADD_TASK', task);
   }
 
   updateTaskStatus(taskId, newStatus) {
@@ -315,13 +315,13 @@ class AppState {
     if (task) {
       task.status = newStatus;
       task.progressPct = newStatus === 'done' ? 100 : (newStatus === 'in_progress' ? 50 : 0);
-      this.save();
+      this.save('UPDATE_TASK_STATUS', { id: taskId, status: newStatus });
     }
   }
 
   deleteTask(taskId) {
     this.tasks = this.tasks.filter(t => t.id !== taskId);
-    this.save();
+    this.save('DELETE_TASK', { id: taskId });
   }
 
   addAnnouncement(ann) {
@@ -329,14 +329,14 @@ class AppState {
     ann.date = new Date().toLocaleDateString('th-TH');
     ann.iconClass = 'icon-rose';
     this.announcements.unshift(ann);
-    this.save();
+    this.save('ADD_ANNOUNCEMENT', ann);
   }
 
   addEmployee(emp) {
     emp.id = 'emp_' + Date.now();
     emp.avatar = emp.role === 'manager' ? '👨‍💼' : '👨‍💻';
     this.users.push(emp);
-    this.save();
+    this.save('ADD_EMPLOYEE', emp);
   }
 
   deleteEmployee(userId) {
@@ -345,7 +345,18 @@ class AppState {
     this.leaveRequests = this.leaveRequests.filter(l => l.userId !== userId);
     // Bug #6 Fix: Unassign tasks instead of deleting — preserves task history
     this.tasks = this.tasks.map(t => t.assigneeId === userId ? { ...t, assigneeId: null } : t);
-    this.save();
+    this.save('DELETE_EMPLOYEE', { id: userId });
+  }
+
+  syncAllToGoogleSheets() {
+    const payload = {
+      users: this.users,
+      attendance: this.attendance,
+      leaveRequests: this.leaveRequests,
+      tasks: this.tasks,
+      announcements: this.announcements
+    };
+    this.postToGoogleScript('SYNC_ALL', payload);
   }
 
   runAutoCutoffCheck() {
@@ -2489,7 +2500,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const val = (document.getElementById('settingAppsScriptUrl')?.value || '').trim();
     GOOGLE_WEB_APP_URL = val;
     localStorage.setItem('richcars_apps_script_url', val);
-    showToast('บันทึก Google Apps Script Web App URL เรียบร้อยแล้ว!');
+    state.syncAllToGoogleSheets();
+    showToast('บันทึก URL และซิงค์ข้อมูลเข้า Google Sheets เรียบร้อยแล้ว!');
+  });
+
+  document.getElementById('btnSyncAllToSheets')?.addEventListener('click', () => {
+    state.syncAllToGoogleSheets();
+    showToast('กำลังส่งข้อมูลระบบทั้งหมดไปสร้างและบันทึกใน Google Sheets...');
   });
 
   // Login Form Submission
