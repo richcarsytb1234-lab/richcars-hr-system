@@ -10,14 +10,7 @@ let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'ht
 localStorage.setItem('richcars_apps_script_url', GOOGLE_WEB_APP_URL);
 
 const SEED_USERS = [
-  { id: 'admin', name: 'Admin', role: 'manager', avatar: '👨‍💼', dept: 'HR Manager', email: 'admin@richcars.com', phone: '081-234-5001', empType: 'office' },
-  { id: 'emp1', name: 'ปุรณพัฒน์ รักเรียน', role: 'member', avatar: '👨‍💻', dept: 'Developer', email: 'puranapat@richcars.com', phone: '089-123-4567', empType: 'office' },
-  { id: 'emp2', name: 'ณัฐวุฒิ สุวรรณโชติ', role: 'member', avatar: '👩‍💼', dept: 'HR Officer', email: 'nattawut@richcars.com', phone: '086-765-4321', empType: 'wfh' },
-  { id: 'emp3', name: 'ธนกฤต สวนดี', role: 'member', avatar: '👨‍💻', dept: 'System Analyst', email: 'thanakrit@richcars.com', phone: '092-345-6789', empType: 'parttime' },
-  { id: 'emp4', name: 'จิราภรณ์ เมฆโต', role: 'member', avatar: '👩‍💼', dept: 'Accountant', email: 'jiraporn@richcars.com', phone: '085-678-9012', empType: 'office' },
-  { id: 'emp5', name: 'พรพล กลิ่นแก้ว', role: 'member', avatar: '👨‍💻', dept: 'Developer', email: 'pornpon@richcars.com', phone: '088-901-2345', empType: 'wfh' },
-  { id: 'emp6', name: 'ชนิดาภา วรโชติ (เมย์)', role: 'member', avatar: '👩‍🎨', dept: 'UX/UI Designer', email: 'chanidapa@richcars.com', phone: '084-555-6789', empType: 'wfh' },
-  { id: 'emp7', name: 'กิตติศักดิ์ เจริญดี (นัท)', role: 'member', avatar: '👨‍💼', dept: 'Marketing Executive', email: 'kittisak@richcars.com', phone: '091-777-4321', empType: 'office' }
+  { id: 'admin', name: 'RICHCARS Admin', role: 'manager', avatar: '👨‍💼', dept: 'ฝ่ายบริหาร / HR', email: 'admin@richcars.com', phone: '081-234-5001', empType: 'office' }
 ];
 
 const getTodayStr = (offset = 0) => {
@@ -29,86 +22,21 @@ const getTodayStr = (offset = 0) => {
   return `${year}-${month}-${day}`;
 };
 
-const SEED_ATTENDANCE = [
-  { id: 'att-emp1-today', userId: 'emp1', date: getTodayStr(0), checkInTime: '08:52:36', checkOutTime: null, status: 'checked_in', note: 'มาทำงาน' },
-  { id: 'att-emp2-today', userId: 'emp2', date: getTodayStr(0), checkInTime: '08:55:00', checkOutTime: '17:35:00', status: 'checked_out', note: 'ตรงเวลา' },
-  { id: 'att-emp3-today', userId: 'emp3', date: getTodayStr(0), checkInTime: '09:12:00', checkOutTime: null, status: 'checked_in', note: 'มาสาย 12 นาที' },
-  { id: 'att-emp4-today', userId: 'emp4', date: getTodayStr(0), checkInTime: '08:45:00', checkOutTime: '17:30:00', status: 'checked_out', note: 'ตรงเวลา' },
-  { id: 'att-emp5-today', userId: 'emp5', date: getTodayStr(0), checkInTime: null, checkOutTime: null, status: 'absent', note: 'ลาป่วย' },
-  { id: 'att-emp6-today', userId: 'emp6', date: getTodayStr(0), checkInTime: '08:48:12', checkOutTime: null, status: 'checked_in', note: 'ลงเวลา 🏠 WFH' },
-  { id: 'att-emp7-today', userId: 'emp7', date: getTodayStr(0), checkInTime: '08:50:00', checkOutTime: '17:30:00', status: 'checked_out', note: 'ตรงเวลา' },
-  
-  // Historical logs for demo
-  { id: 'att-emp1-y1', userId: 'emp1', date: getTodayStr(-1), checkInTime: '08:50:00', checkOutTime: '17:35:00', status: 'checked_out', note: 'ตรงเวลา' },
-  { id: 'att-emp1-y2', userId: 'emp1', date: getTodayStr(-2), checkInTime: '09:05:00', checkOutTime: '18:10:00', status: 'checked_out', note: 'มาสาย 5 นาที' },
-  { id: 'att-emp1-y3', userId: 'emp1', date: getTodayStr(-3), checkInTime: '08:43:00', checkOutTime: '17:28:00', status: 'checked_out', note: 'ตรงเวลา' }
-];
+const SEED_ATTENDANCE = [];
 
-const SEED_LEAVE_REQUESTS = [
-  { id: 'lv-1', userId: 'emp5', userName: 'นายพรพล กลิ่นแก้ว', type: 'ลาป่วย', dateRange: getTodayStr(0), startDate: getTodayStr(0), endDate: getTodayStr(0), reason: 'มีไข้สูง ปวดศีรษะ', status: 'approved' },
-  { id: 'lv-2', userId: 'emp4', userName: 'น.ส.จิราภรณ์ เมฆโต', type: 'ลากิจ', dateRange: getTodayStr(5), startDate: getTodayStr(5), endDate: getTodayStr(5), reason: 'ติดต่อราชการกทม.', status: 'pending' },
-  { id: 'lv-3', userId: 'emp3', userName: 'นายธนกฤต สวนดี', type: 'ลาพักร้อน', dateRange: `${getTodayStr(7)} - ${getTodayStr(8)}`, startDate: getTodayStr(7), endDate: getTodayStr(8), reason: 'พักผ่อนประจำปี', status: 'approved' }
-];
+const SEED_LEAVE_REQUESTS = [];
 
 const SEED_ANNOUNCEMENTS = [
   {
     id: 'ann-1',
-    title: '📢 ประกาศวันหยุดพิเศษ',
-    desc: 'บริษัทจะหยุดทำการในวันที่ 13 พ.ค. 2567 เนื่องในวันพืชมงคล ขอให้พนักงานทุกท่านเตรียมวางแผนงานล่วงหน้า',
-    date: '6 พ.ค. 2567',
+    title: '🎉 ยินดีต้อนรับสู่ระบบ RICHCARS HR Management System',
+    desc: 'ระบบบริหารจัดการพนักงาน บันทึกเวลาเข้า-ออกงานด้วยพิกัด GPS และยื่นใบลาออนไลน์อย่างเป็นทางการ',
+    date: 'วันนี้',
     iconClass: 'icon-rose'
-  },
-  {
-    id: 'ann-2',
-    title: '🎉 งานเลี้ยงประจำปี 2567',
-    desc: 'บริษัทจัดงานเลี้ยงประจำปีในวันที่ 25 พ.ค. 2567 ณ โรงแรม Grand Hyatt Erawan ขอเชิญพนักงานลงชื่อเข้าร่วม',
-    date: '2 พ.ค. 2567',
-    iconClass: 'icon-blue'
   }
 ];
 
-const SEED_TASKS = [
-  {
-    id: 't1',
-    title: 'อัปเดตข้อมูลลูกค้าในระบบ CRM',
-    description: 'CRM Update ข้อมูลช่วงเวลา 09:00 - 11:00 น.',
-    deadline: getTodayStr(0),
-    status: 'in_progress',
-    priority: 'high',
-    assigneeId: 'emp1',
-    progressPct: 60
-  },
-  {
-    id: 't2',
-    title: 'ทำรายงานยอดขายประจำสัปดาห์',
-    description: 'Sales Report ช่วงเวลา 13:00 - 15:00 น.',
-    deadline: getTodayStr(2),
-    status: 'todo',
-    priority: 'medium',
-    assigneeId: 'emp1',
-    progressPct: 0
-  },
-  {
-    id: 't3',
-    title: 'ออกแบบหน้า Landing Page โปรโมชั่น',
-    description: 'Website Project ช่วงเวลา 15:30 - 17:30 น.',
-    deadline: getTodayStr(1),
-    status: 'in_progress',
-    priority: 'high',
-    assigneeId: 'emp1',
-    progressPct: 30
-  },
-  {
-    id: 't4',
-    title: 'ตรวจสอบระบบและเตรียม Backup',
-    description: 'Server Health Check & Data Backup',
-    deadline: getTodayStr(-1),
-    status: 'done',
-    priority: 'high',
-    assigneeId: 'emp3',
-    progressPct: 100
-  }
-];
+const SEED_TASKS = [];
 
 // --- APP STATE ---
 const KEYS = {
@@ -133,35 +61,11 @@ class AppState {
     this.activeTab = this.load(KEYS.ACTIVE_TAB, 'dashboard');
     this.authSession = this.load(KEYS.AUTH_SESSION, null);
 
-    // Auto-sync newly added seed users and attendance
-    let updatedUsers = false;
-    SEED_USERS.forEach(su => {
-      if (!this.users.some(u => u.id === su.id)) {
-        this.users.push(su);
-        updatedUsers = true;
-      }
-    });
-
-    SEED_ATTENDANCE.forEach(sa => {
-      if (!this.attendance.some(a => a.id === sa.id)) {
-        this.attendance.push(sa);
-        updatedUsers = true;
-      }
-    });
-
-    SEED_LEAVE_REQUESTS.forEach(sl => {
-      const existingIdx = this.leaveRequests.findIndex(l => l.id === sl.id);
-      if (existingIdx === -1) {
-        this.leaveRequests.push(sl);
-        updatedUsers = true;
-      } else if (sl.id === 'lv-1') {
-        // Ensure demo emp5 leave is set for today
-        this.leaveRequests[existingIdx] = sl;
-        updatedUsers = true;
-      }
-    });
-
-    if (updatedUsers) this.save();
+    // Ensure Master Admin always exists
+    if (!this.users.some(u => u.id === 'admin')) {
+      this.users.unshift(SEED_USERS[0]);
+      this.save();
+    }
   }
 
   load(key, fallback) {
@@ -357,6 +261,33 @@ class AppState {
       announcements: this.announcements
     };
     this.postToGoogleScript('SYNC_ALL', payload);
+  }
+
+  clearDemoData() {
+    this.users = [
+      { id: 'admin', name: 'RICHCARS Admin', role: 'manager', avatar: '👨‍💼', dept: 'ฝ่ายบริหาร / HR', email: 'admin@richcars.com', phone: '081-234-5001', empType: 'office' }
+    ];
+    this.attendance = [];
+    this.leaveRequests = [];
+    this.tasks = [];
+    this.announcements = [
+      {
+        id: 'ann-1',
+        title: '🎉 ยินดีต้อนรับสู่ระบบ RICHCARS HR Management System',
+        desc: 'ระบบบริหารจัดการพนักงาน บันทึกเวลาเข้า-ออกงานด้วยพิกัด GPS และยื่นใบลาออนไลน์อย่างเป็นทางการ',
+        date: 'วันนี้',
+        iconClass: 'icon-rose'
+      }
+    ];
+    this.activeUserId = 'admin';
+    this.authSession = { userId: 'admin', email: 'admin@richcars.com', name: 'RICHCARS Admin', loggedInAt: new Date().toISOString() };
+    this.save('SYNC_ALL', {
+      users: this.users,
+      attendance: this.attendance,
+      leaveRequests: this.leaveRequests,
+      tasks: this.tasks,
+      announcements: this.announcements
+    });
   }
 
   runAutoCutoffCheck() {
@@ -2507,6 +2438,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnSyncAllToSheets')?.addEventListener('click', () => {
     state.syncAllToGoogleSheets();
     showToast('กำลังส่งข้อมูลระบบทั้งหมดไปสร้างและบันทึกใน Google Sheets...');
+  });
+
+  document.getElementById('btnProductionReset')?.addEventListener('click', () => {
+    if (confirm('คุณต้องการล้างข้อมูลทดสอบทั้งหมดเพื่อเริ่มต้นใช้งานจริงในบริษัทใช่หรือไม่?\n\n⚠️ ประวัติเข้างาน ใบลา และรายชื่อสมมติจะถูกลบทิ้ง เพื่อเริ่มตารางบริษัทจริงสดๆ')) {
+      state.clearDemoData();
+      renderApp();
+      showToast('🧹 ล้างข้อมูลทดสอบเรียบร้อยแล้ว! ระบบพร้อมสำหรับการใช้งานจริง 100%', 'success', 5000);
+    }
   });
 
   // Login Form Submission
