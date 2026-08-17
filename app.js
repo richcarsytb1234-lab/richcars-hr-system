@@ -2687,14 +2687,45 @@ function showLoginError(msg) {
   }
 }
 
+let tokenClient = null;
+
 function initGoogleOAuth() {
-  if (window.google && google.accounts && google.accounts.id && GOOGLE_CLIENT_ID) {
+  if (window.google && google.accounts) {
     try {
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleLoginResponse,
-        auto_select: false
-      });
+      // 1. Initialize GIS OneTap / ID Client
+      if (google.accounts.id && GOOGLE_CLIENT_ID) {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleLoginResponse,
+          auto_select: false
+        });
+
+        // Render official Google button inside wrapper if container exists
+        const btnContainer = document.getElementById('googleSignInBtnWrapper');
+        if (btnContainer) {
+          btnContainer.innerHTML = '';
+          google.accounts.id.renderButton(btnContainer, {
+            theme: 'outline',
+            size: 'large',
+            width: '320',
+            text: 'continue_with',
+            locale: 'th'
+          });
+        }
+      }
+
+      // 2. Initialize GIS OAuth2 Token Client for Popup on Button Click
+      if (google.accounts.oauth2 && GOOGLE_CLIENT_ID) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'email profile openid',
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              fetchGoogleUserInfo(tokenResponse.access_token);
+            }
+          }
+        });
+      }
     } catch (err) {
       console.warn('Google Identity initialization deferred:', err);
     }
@@ -2702,64 +2733,91 @@ function initGoogleOAuth() {
 }
 
 function handleGoogleSignIn() {
-  if (window.google && google.accounts && google.accounts.id && GOOGLE_CLIENT_ID) {
+  if (window.location.protocol === 'file:') {
+    showToast('⚠️ กรุณาเข้าใช้งานผ่านเว็บจริงบน GitHub Pages เพื่อทดสอบ Google Login', 'warning', 5000);
+    return;
+  }
+
+  if (window.google && google.accounts) {
     try {
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleLoginResponse
-      });
-      google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // Fallback if OneTap prompt is suppressed on current domain
-          console.log('Google OneTap prompt status:', notification.getNotDisplayedReason());
-        }
-      });
+      if (tokenClient) {
+        // Request Google OAuth Popup Window
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+      } else if (google.accounts.id && GOOGLE_CLIENT_ID) {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleLoginResponse
+        });
+        google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            const reason = notification.getNotDisplayedReason();
+            console.log('Google OneTap prompt reason:', reason);
+            showToast(`💡 กรุณากดเลือกบัญชีในปุ่ม Google ด้านล่าง (สถานะ: ${reason || 'เปิดทางเว็บหลัก'})`, 'info', 4500);
+          }
+        });
+      }
     } catch (e) {
       console.error('Google Sign-In prompt error:', e);
+      showToast('⚠️ เกิดข้อผิดพลาดในการเปิดหน้าล็อกอิน Google', 'error');
     }
   } else {
-    // Demo Google OAuth Callback fallback
-    const demoGoogleUser = state.users[1] || state.users[0]; // Puranapat
-    showToast(`🔑 เข้าสู่ระบบด้วย Google Account สำเร็จ!\nยินดีต้อนรับ: ${demoGoogleUser.name}`, 'success');
-    state.setAuthSession(demoGoogleUser);
-    renderApp();
+    showToast('⚠️ กำลังโหลดระบบ Google Sign-In กรุณาลองใหม่อีกครั้งในอีกสักครู่', 'warning');
+  }
+}
+
+async function fetchGoogleUserInfo(accessToken) {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const info = await res.json();
+    if (info && info.email) {
+      processGoogleUserLogin(info.email, info.name, info.picture);
+    }
+  } catch (err) {
+    console.error('Failed to fetch Google User Info:', err);
+    showToast('ไม่สามารถดึงข้อมูลโปรไฟล์จาก Google ได้', 'error');
   }
 }
 
 function handleGoogleLoginResponse(response) {
   try {
     const responsePayload = parseJwt(response.credential);
-    const googleEmail = responsePayload.email;
-    const googleName = responsePayload.name || googleEmail.split('@')[0];
-    const googlePicture = responsePayload.picture;
-    
-    let user = state.users.find(u => u.email && u.email.toLowerCase() === googleEmail.toLowerCase());
-    
-    if (user) {
-      showToast(`🔑 เข้าสู่ระบบด้วย Google สำเร็จ: ${user.name}`);
-      state.setAuthSession(user);
-      renderApp();
-    } else {
-      // Auto-register new company employee if email belongs to corporate domain or approved list
-      const newEmp = {
-        id: 'emp_' + Date.now(),
-        name: googleName,
-        email: googleEmail,
-        role: 'member',
-        avatar: '👤',
-        dept: 'พนักงานใหม่',
-        phone: '-',
-        empType: 'office'
-      };
-      state.users.push(newEmp);
-      state.save();
-      showToast(`🎉 ลงทะเบียนพนักงานใหม่สำเร็จ: ${googleName}`);
-      state.setAuthSession(newEmp);
-      renderApp();
+    if (responsePayload && responsePayload.email) {
+      processGoogleUserLogin(responsePayload.email, responsePayload.name, responsePayload.picture);
     }
   } catch (err) {
     console.error('Error parsing Google Token:', err);
     showToast('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์ Google Login', 'error');
+  }
+}
+
+function processGoogleUserLogin(googleEmail, googleName, googlePicture) {
+  const email = googleEmail.toLowerCase();
+  let user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+  
+  if (user) {
+    showToast(`🔑 เข้าสู่ระบบด้วย Google สำเร็จ: ${user.name}`);
+    state.setAuthSession(user);
+    renderApp();
+  } else {
+    // Check if employee matches company domain or auto-register
+    const displayName = googleName || email.split('@')[0];
+    const newEmp = {
+      id: 'emp_' + Date.now(),
+      name: displayName,
+      email: email,
+      role: 'member',
+      avatar: '👤',
+      dept: 'พนักงานทั่วไป',
+      phone: '-',
+      empType: 'office'
+    };
+    state.users.push(newEmp);
+    state.save('ADD_EMPLOYEE', newEmp);
+    showToast(`🎉 ต้อนรับพนักงานใหม่: ${displayName}`);
+    state.setAuthSession(newEmp);
+    renderApp();
   }
 }
 
