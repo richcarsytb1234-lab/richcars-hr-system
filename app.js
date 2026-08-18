@@ -471,17 +471,6 @@ function initLiveClock() {
   setInterval(tick, 1000);
 }
 
-// --- RENDER LOGIC ---
-function renderUserSelects() {
-  // Demo user selectors removed in production
-}
-
-function switchActiveUser(userId) {
-  state.activeUserId = userId;
-  state.save();
-  renderApp();
-}
-
 function switchTab(tabId) {
   state.activeTab = tabId;
   state.save();
@@ -514,7 +503,6 @@ function renderApp() {
   }
 
   state.runAutoCutoffCheck();
-  renderUserSelects();
   const user = state.getActiveUser();
 
   // Header Pill
@@ -1586,7 +1574,7 @@ function exportAdminAttendanceSummaryCSV() {
     csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
   });
 
-  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = `รายงานเวลาทำงานพนักงาน_${startDateStr}_ถึง_${endDateStr}.csv`;
@@ -1825,11 +1813,6 @@ function openModal(id) {
 }
 function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 // --- DEBOUNCE UTILITY ---
 function debounce(fn, delay = 300) {
   let timer;
@@ -1887,7 +1870,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 // Handle Geofenced Clock Action (In / Out)
 function handleGeofencedClockAction(actionType) {
   const user = state.getActiveUser();
-  const todayLeave = getTodayApprovedLeave(user.id);
+  const todayLeave = state.getTodayApprovedLeave(user.id);
 
   if (todayLeave && actionType === 'in') {
     alert(`⛔ ไม่สามารถลงเวลาเข้างานได้!\n\n🏖️ วันนี้คุณอยู่ระหว่าง "${todayLeave.type}" (ได้รับการอนุมัติแล้ว)\n\n💬 หากคุณต้องการลงเวลาทำงานจริง กรุณาติดต่อ Admin หรือหัวหน้างานเพื่อยกเลิกใบลา`);
@@ -2256,14 +2239,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // User Selectors
-  document.getElementById('globalUserSelect')?.addEventListener('change', (e) => {
-    switchActiveUser(e.target.value);
-  });
-  document.getElementById('settingsUserSelect')?.addEventListener('change', (e) => {
-    switchActiveUser(e.target.value);
-  });
-
   // Clock In / Out Buttons
   document.getElementById('btnEmpClockIn')?.addEventListener('click', () => {
     handleGeofencedClockAction('in');
@@ -2521,13 +2496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const val = (document.getElementById('settingAppsScriptUrl')?.value || '').trim();
     GOOGLE_WEB_APP_URL = val;
     localStorage.setItem('richcars_apps_script_url', val);
-    state.syncAllToGoogleSheets();
-    showToast('บันทึก URL และซิงค์ข้อมูลเข้า Google Sheets เรียบร้อยแล้ว!');
-  });
-
-  document.getElementById('btnSyncAllToSheets')?.addEventListener('click', () => {
-    state.syncAllToGoogleSheets();
-    showToast('กำลังส่งข้อมูลระบบทั้งหมดไปสร้างและบันทึกใน Google Sheets...');
+    showToast('บันทึก Web App URL เรียบร้อยแล้ว');
   });
 
   document.getElementById('btnProductionReset')?.addEventListener('click', () => {
@@ -2537,12 +2506,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('🧹 ล้างข้อมูลทดสอบเรียบร้อยแล้ว! ระบบพร้อมสำหรับการใช้งานจริง 100%', 'success', 5000);
     }
   });
-
-  // Login Form Submission
-  document.getElementById('loginForm')?.addEventListener('submit', handleLoginFormSubmit);
-
-  // Toggle Password Show/Hide
-  document.getElementById('btnTogglePassword')?.addEventListener('click', togglePasswordVisibility);
 
   // Google Sign-In Button
   document.getElementById('btnGoogleSignIn')?.addEventListener('click', handleGoogleSignIn);
