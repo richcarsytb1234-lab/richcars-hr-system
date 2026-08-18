@@ -15,6 +15,12 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+  <!-- FULL SCREEN LOADING OVERLAY FOR GOOGLE SHEETS SYNC -->
+  <div id="fullScreenLoadingOverlay" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ffffff;font-family:'Prompt',sans-serif;">
+    <div style="font-size:2.5rem;margin-bottom:1rem;"><i class="fa-solid fa-spinner fa-spin"></i></div>
+    <div style="font-size:1.1rem;font-weight:600;">กำลังโหลดข้อมูลล่าสุด...</div>
+  </div>
+
   <!-- Mobile Sidebar Overlay Backdrop -->
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
@@ -29,47 +35,6 @@
           RICH<span class="brand-accent">CARS</span>
         </div>
         <p class="login-subtitle">ระบบบริหารจัดการพนักงานและบันทึกเวลาทำงาน</p>
-      </div>
-
-      <form id="loginForm" class="login-form">
-        <div class="login-alert hidden" id="loginAlert">
-          <i class="fa-solid fa-circle-exclamation"></i> <span id="loginAlertMsg">อีเมลหรือรหัสผ่านไม่ถูกต้อง</span>
-        </div>
-
-        <div class="form-group">
-          <label for="loginEmail" class="required">อีเมลพนักงาน / ชื่อผู้ใช้:</label>
-          <div class="input-icon-wrapper">
-            <i class="fa-solid fa-envelope input-left-icon"></i>
-            <input type="email" id="loginEmail" class="form-input with-left-icon" placeholder="เช่น admin@richcars.com" required autocomplete="username">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="loginPassword" class="required">รหัสผ่าน:</label>
-          <div class="input-icon-wrapper">
-            <i class="fa-solid fa-lock input-left-icon"></i>
-            <input type="password" id="loginPassword" class="form-input with-left-icon with-right-icon" placeholder="••••••••" required autocomplete="current-password">
-            <button type="button" class="btn-toggle-password" id="btnTogglePassword" title="แสดง/ซ่อนรหัสผ่าน">
-              <i class="fa-regular fa-eye" id="passwordEyeIcon"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="login-form-options">
-          <label class="remember-me-label">
-            <input type="checkbox" id="chkRememberMe" checked>
-            <span>จดจำการเข้าสู่ระบบ</span>
-          </label>
-          <a href="javascript:void(0)" class="link-forgot-pwd" onclick="alert('กรุณาติดต่อแผนก HR หรือ IT Admin เพื่อทำการรีเซ็ตรหัสผ่านของคุณ');">ลืมรหัสผ่าน?</a>
-        </div>
-
-        <button type="submit" class="btn btn-rich-red btn-lg-wide login-submit-btn">
-          <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ
-        </button>
-      </form>
-
-      <div class="login-divider">
-        <span>หรือเข้าใช้งานด้วย</span>
       </div>
 
       <!-- GOOGLE SIGN IN BUTTON CONTAINER -->
@@ -130,12 +95,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="role-switch-box">
-          <label><i class="fa-solid fa-users-gear"></i> สลับสิทธิ์ผู้ใช้งาน:</label>
-          <select id="globalUserSelect" class="sidebar-user-select">
-            <!-- Populated via JS -->
-          </select>
-        </div>
         <button type="button" class="btn-logout-sidebar" id="btnLogoutSidebar" title="ออกจากระบบ">
           <i class="fa-solid fa-right-from-bracket"></i> <span>ออกจากระบบ</span>
         </button>
@@ -985,30 +944,10 @@
                 <small style="color: var(--text-muted); display: block; margin-top: 0.4rem;">* ระบบเชื่อมต่อกับ Google Apps Script Web App เรียบร้อยแล้ว ข้อมูลจะถูกซิงค์เข้า Google Sheets โดยอัตโนมัติ</small>
               </div>
               <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" id="btnSyncAllToSheets">
-                  <i class="fa-solid fa-rotate"></i> ซิงค์ข้อมูลระบบทั้งหมดเข้า Google Sheets ทันที
-                </button>
                 <button type="button" class="btn btn-rich-red btn-sm" id="btnProductionReset">
                   <i class="fa-solid fa-broom"></i> 🧹 ล้างข้อมูลทดสอบและตั้งต้นบริษัทเข้า Google Sheets
                 </button>
               </div>
-            </div>
-          </div>
-
-          <div class="card-box">
-            <div class="card-box-header">
-              <h3>ตั้งค่าระบบและการสลับผู้ใช้งาน</h3>
-            </div>
-            <div class="settings-body" style="padding: 1rem 0;">
-              <div class="form-group" style="max-width: 400px;">
-                <label>เลือกบทบาททดสอบการใช้งาน:</label>
-                <select id="settingsUserSelect" class="form-select">
-                  <!-- Populated via JS -->
-                </select>
-              </div>
-              <p style="color: #64748b; font-size: 0.9rem; margin-top: 1rem;">
-                * ระบบนี้จำลองการใช้งานระหว่างมุมมอง **Admin (แอดมิน/หัวหน้างาน)** และ **Employee (พนักงาน)** ข้อมูลจะถูกบันทึกไว้ในระบบและเชื่อมต่อ Google Sheets
-              </p>
             </div>
           </div>
         </div>

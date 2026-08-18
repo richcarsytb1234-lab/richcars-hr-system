@@ -3,11 +3,23 @@
    ========================================================================== */
 
 // --- SEED MOCK DATA & GOOGLE INTEGRATION CONFIG ---
+const SECRET_KEY = 'rc-hr-8f3a9c2e1b7d4f6a0e5c8b2d9f1a3e7c';
+const ALLOWED_EMAIL_DOMAIN = 'richcars.com';
 const GOOGLE_CLIENT_ID = '392272628661-jgt4jlgc7abvajk3e4983vpljuvv8nlt.apps.googleusercontent.com';
 const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1fkWEILHaTxSJ3qpyGMPW4ot69sLGLEyRvcINxz5HG0Y/edit';
 // Deployed Google Apps Script Web App URL
 let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'https://script.google.com/macros/s/AKfycbwB5ita8giiDRAKoQJeE_gVvJ24Hw5122fj_RF-4n2JCInu1qC5erTUEErrXl1X5_ektg/exec';
 localStorage.setItem('richcars_apps_script_url', GOOGLE_WEB_APP_URL);
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str == null ? '' : String(str);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 const SEED_USERS = [
   { id: 'admin', name: 'RICHCARS Admin', role: 'manager', avatar: '👨‍💼', dept: 'ฝ่ายบริหาร / HR', email: 'admin@richcars.com', phone: '081-234-5001', empType: 'office' }
@@ -73,7 +85,7 @@ class AppState {
     return raw ? JSON.parse(raw) : fallback;
   }
 
-  save(action = null, payload = null) {
+  saveToLocalStorage() {
     localStorage.setItem(KEYS.USERS, JSON.stringify(this.users));
     localStorage.setItem(KEYS.TASKS, JSON.stringify(this.tasks));
     localStorage.setItem(KEYS.ATTENDANCE, JSON.stringify(this.attendance));
@@ -82,7 +94,10 @@ class AppState {
     localStorage.setItem(KEYS.ACTIVE_USER, JSON.stringify(this.activeUserId));
     localStorage.setItem(KEYS.ACTIVE_TAB, JSON.stringify(this.activeTab));
     localStorage.setItem(KEYS.AUTH_SESSION, JSON.stringify(this.authSession));
+  }
 
+  save(action = null, payload = null) {
+    this.saveToLocalStorage();
     if (GOOGLE_WEB_APP_URL && action) {
       this.postToGoogleScript(action, payload);
     }
@@ -95,7 +110,7 @@ class AppState {
         method: 'POST',
         mode: 'no-cors', // Apps Script web app CORS mode
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, payload })
+        body: JSON.stringify({ key: SECRET_KEY, action, payload })
       });
     } catch (e) {
       console.warn('Google Sheets sync background status:', e);
@@ -124,6 +139,17 @@ class AppState {
   getTodayRecord(userId) {
     const today = getTodayStr(0);
     return this.attendance.find(a => a.userId === userId && a.date === today);
+  }
+
+  getTodayApprovedLeave(userId) {
+    const todayStr = getTodayStr(0);
+    const todayTime = new Date(todayStr).getTime();
+    return this.leaveRequests.find(l => {
+      if (l.userId !== userId || l.status !== 'approved') return false;
+      const start = l.startDate ? new Date(l.startDate).getTime() : 0;
+      const end = l.endDate ? new Date(l.endDate).getTime() : 0;
+      return start <= todayTime && todayTime <= end;
+    });
   }
 
   clockIn(userId, dist, lat, lng, customNote = null) {
@@ -320,10 +346,16 @@ class AppState {
 
       members.forEach(u => {
         const hasAtt = this.attendance.some(a => a.userId === u.id && a.date === pastDate);
-        const hasApprovedLeave = this.leaveRequests.some(l => l.userId === u.id && l.status === 'approved' && l.startDate <= pastDate && l.endDate >= pastDate);
+        const hasApprovedLeave = this.leaveRequests.some(l => {
+          if (l.userId !== u.id || l.status !== 'approved') return false;
+          const start = l.startDate ? new Date(l.startDate).getTime() : 0;
+          const end = l.endDate ? new Date(l.endDate).getTime() : 0;
+          const pTime = new Date(pastDate).getTime();
+          return start <= pTime && pTime <= end;
+        });
 
         if (!hasAtt && !hasApprovedLeave) {
-          this.attendance.push({
+          const autoRecord = {
             id: 'att_auto_absent_' + pastDate + '_' + u.id,
             userId: u.id,
             date: pastDate,
@@ -331,19 +363,93 @@ class AppState {
             checkOutTime: null,
             status: 'absent',
             note: '🔴 ขาดงาน (ตัดรอบอัตโนมัติ 23:59 น.)'
-          });
-          changed = true;
+          };
+          this.attendance.push(autoRecord);
+          this.save('CLOCK_IN', autoRecord);
         }
       });
-    }
-
-    if (changed) {
-      this.save();
     }
   }
 }
 
 const state = new AppState();
+
+// --- 1.1 FETCH ALL DATA FROM GOOGLE SHEETS ---
+async function fetchAllFromGoogleSheet() {
+  if (!GOOGLE_WEB_APP_URL) return false;
+  try {
+    const url = `${GOOGLE_WEB_APP_URL}?key=${SECRET_KEY}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json && json.success === true && json.data) {
+      const normalizeDate = (dStr) => {
+        if (!dStr) return dStr;
+        if (typeof dStr === 'string' && dStr.includes('T')) {
+          return dStr.split('T')[0];
+        }
+        return String(dStr).trim();
+      };
+
+      if (Array.isArray(json.data.users)) state.users = json.data.users;
+      if (Array.isArray(json.data.attendance)) {
+        state.attendance = json.data.attendance.map(a => ({
+          ...a,
+          date: normalizeDate(a.date)
+        }));
+      }
+      if (Array.isArray(json.data.leaveRequests)) {
+        state.leaveRequests = json.data.leaveRequests.map(l => ({
+          ...l,
+          startDate: normalizeDate(l.startDate),
+          endDate: normalizeDate(l.endDate)
+        }));
+      }
+      if (Array.isArray(json.data.tasks)) state.tasks = json.data.tasks;
+      if (Array.isArray(json.data.announcements)) state.announcements = json.data.announcements;
+
+      state.saveToLocalStorage();
+      return true;
+    } else {
+      showToast('ไม่สามารถซิงค์ข้อมูลล่าสุดได้ กำลังแสดงข้อมูลที่บันทึกไว้ในเครื่อง', 'warning');
+      return false;
+    }
+  } catch (e) {
+    console.warn('Fetch from Google Sheet failed:', e);
+    showToast('ไม่สามารถซิงค์ข้อมูลล่าสุดได้ กำลังแสดงข้อมูลที่บันทึกไว้ในเครื่อง', 'warning');
+    return false;
+  }
+}
+
+// 1.2 Full-screen loading overlay on app start
+async function initAppWithLoading() {
+  const overlay = document.getElementById('fullScreenLoadingOverlay');
+  if (overlay && state.isLoggedIn()) {
+    overlay.classList.remove('hidden');
+  }
+  try {
+    if (state.isLoggedIn()) {
+      await fetchAllFromGoogleSheet();
+    }
+  } catch (err) {
+    console.error('Init fetch error:', err);
+  } finally {
+    if (overlay) overlay.classList.add('hidden');
+    renderApp();
+  }
+}
+
+// 1.3 Visibility Change Listener (Tab focus sync)
+let lastVisibilityFetchTime = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && state.isLoggedIn()) {
+    const now = Date.now();
+    if (now - lastVisibilityFetchTime >= 10000) { // 10s cooldown
+      lastVisibilityFetchTime = now;
+      await fetchAllFromGoogleSheet();
+      renderApp();
+    }
+  }
+});
 
 // Calendar Navigation State
 let calViewDate = new Date();
@@ -367,23 +473,7 @@ function initLiveClock() {
 
 // --- RENDER LOGIC ---
 function renderUserSelects() {
-  const globalSelect = document.getElementById('globalUserSelect');
-  const settingsSelect = document.getElementById('settingsUserSelect');
-
-  const populate = (el) => {
-    if (!el) return;
-    el.innerHTML = '';
-    state.users.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = `${u.avatar} ${u.name} (${u.role === 'manager' ? 'Admin' : u.dept})`;
-      if (u.id === state.activeUserId) opt.selected = true;
-      el.appendChild(opt);
-    });
-  };
-
-  populate(globalSelect);
-  populate(settingsSelect);
+  // Demo user selectors removed in production
 }
 
 function switchActiveUser(userId) {
@@ -1496,7 +1586,7 @@ function exportAdminAttendanceSummaryCSV() {
     csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
   });
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = `รายงานเวลาทำงานพนักงาน_${startDateStr}_ถึง_${endDateStr}.csv`;
@@ -2536,7 +2626,7 @@ function renderCommandPaletteResults(query) {
     allItems.push({
       type: 'user',
       userId: u.id,
-      title: `${u.avatar} ${u.name} (${u.roleTitle || u.dept})`,
+      title: `${u.avatar || '👤'} ${u.name || 'พนักงาน'} (${u.roleTitle || u.dept || 'พนักงาน'})`,
       icon: 'fa-user',
       category: 'พนักงานในระบบ'
     });
@@ -2580,68 +2670,7 @@ function renderCommandPaletteResults(query) {
   resultsContainer.innerHTML = html || `<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">ไม่พบรายการที่ค้นหา "${escapeHtml(query)}"</div>`;
 }
 
-// --- AUTHENTICATION & LOGIN FUNCTIONS ---
-function fillDemoLogin(email, password) {
-  const emailInput = document.getElementById('loginEmail');
-  const pwdInput = document.getElementById('loginPassword');
-  if (emailInput) emailInput.value = email;
-  if (pwdInput) pwdInput.value = password;
-  const alertBox = document.getElementById('loginAlert');
-  if (alertBox) alertBox.classList.add('hidden');
-}
-
-function togglePasswordVisibility() {
-  const pwdInput = document.getElementById('loginPassword');
-  const eyeIcon = document.getElementById('passwordEyeIcon');
-  if (!pwdInput || !eyeIcon) return;
-
-  if (pwdInput.type === 'password') {
-    pwdInput.type = 'text';
-    eyeIcon.className = 'fa-regular fa-eye-slash';
-  } else {
-    pwdInput.type = 'password';
-    eyeIcon.className = 'fa-regular fa-eye';
-  }
-}
-
-function handleLoginFormSubmit(e) {
-  if (e) e.preventDefault();
-  const emailInput = document.getElementById('loginEmail');
-  const pwdInput = document.getElementById('loginPassword');
-  const alertBox = document.getElementById('loginAlert');
-
-  const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-  const password = pwdInput ? pwdInput.value.trim() : '';
-
-  if (!email || !password) {
-    showLoginError('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน');
-    return;
-  }
-
-  // Search user by email or username
-  const user = state.users.find(u => 
-    (u.email && u.email.toLowerCase() === email) || 
-    u.id.toLowerCase() === email || 
-    u.name.toLowerCase() === email
-  );
-
-  if (user) {
-    if (alertBox) alertBox.classList.add('hidden');
-    state.setAuthSession(user);
-    renderApp();
-  } else {
-    showLoginError('ไม่พบบัญชีพนักงานที่มีอีเมลนี้ในระบบ');
-  }
-}
-
-function showLoginError(msg) {
-  const alertBox = document.getElementById('loginAlert');
-  const alertMsg = document.getElementById('loginAlertMsg');
-  if (alertBox && alertMsg) {
-    alertMsg.textContent = msg;
-    alertBox.classList.remove('hidden');
-  }
-}
+// --- AUTHENTICATION & GOOGLE LOGIN FUNCTIONS ---
 
 let tokenClient = null;
 
@@ -2750,14 +2779,19 @@ function handleGoogleLoginResponse(response) {
 
 function processGoogleUserLogin(googleEmail, googleName, googlePicture) {
   const email = googleEmail.toLowerCase();
+  
+  if (!email.endsWith('@' + ALLOWED_EMAIL_DOMAIN)) {
+    showToast(`⚠️ อีเมลนี้ (${email}) ไม่ได้อยู่ในโดเมนบริษัท (@${ALLOWED_EMAIL_DOMAIN}) กรุณาติดต่อฝ่าย HR`, 'error', 5000);
+    return;
+  }
+
   let user = state.users.find(u => u.email && u.email.toLowerCase() === email);
   
   if (user) {
     showToast(`🔑 เข้าสู่ระบบด้วย Google สำเร็จ: ${user.name}`);
     state.setAuthSession(user);
-    renderApp();
+    initAppWithLoading();
   } else {
-    // Check if employee matches company domain or auto-register
     const displayName = googleName || email.split('@')[0];
     const newEmp = {
       id: 'emp_' + Date.now(),
@@ -2773,7 +2807,7 @@ function processGoogleUserLogin(googleEmail, googleName, googlePicture) {
     state.save('ADD_EMPLOYEE', newEmp);
     showToast(`🎉 ต้อนรับพนักงานใหม่: ${displayName}`);
     state.setAuthSession(newEmp);
-    renderApp();
+    initAppWithLoading();
   }
 }
 
@@ -2834,15 +2868,20 @@ function updateTimeAwareLoginGlow() {
 // --- THAI DATE INPUT FORMATTER (DD/MM/YYYY - วัน/เดือน/ปี) ---
 function initThaiDateInputs() {
   document.querySelectorAll('input[type="date"]').forEach(input => {
-    if (input.dataset.thaiInit) {
-      const event = new Event('change');
-      input.dispatchEvent(event);
-      return;
+    const parent = input.parentElement;
+    if (parent && parent.classList.contains('thai-date-wrapper')) {
+      const grandParent = parent.parentElement;
+      if (grandParent) {
+        grandParent.insertBefore(input, parent);
+        parent.remove();
+      }
     }
+
+    delete input.dataset.thaiInit;
     input.dataset.thaiInit = 'true';
 
-    const parent = input.parentElement;
-    if (!parent) return;
+    const newParent = input.parentElement;
+    if (!newParent) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'thai-date-wrapper';
@@ -2854,7 +2893,7 @@ function initThaiDateInputs() {
       <i class="fa-regular fa-calendar-days thai-date-icon"></i>
     `;
 
-    parent.insertBefore(wrapper, input);
+    newParent.insertBefore(wrapper, input);
     wrapper.appendChild(input);
     wrapper.appendChild(displayBox);
 
@@ -2867,7 +2906,7 @@ function initThaiDateInputs() {
         const parts = val.split('-');
         if (parts.length === 3) {
           const [y, m, d] = parts;
-          valSpan.textContent = `${d}/${m}/${y}`; // วัน/เดือน/ปี (DD/MM/YYYY)
+          valSpan.textContent = `${d}/${m}/${y}`;
           valSpan.style.color = 'var(--text-main)';
         }
       } else {
