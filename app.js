@@ -7,7 +7,7 @@ const SECRET_KEY = 'rc-hr-8f3a9c2e1b7d4f6a0e5c8b2d9f1a3e7c';
 const GOOGLE_CLIENT_ID = '392272628661-jgt4jlgc7abvajk3e4983vpljuvv8nlt.apps.googleusercontent.com';
 const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1fkWEILHaTxSJ3qpyGMPW4ot69sLGLEyRvcINxz5HG0Y/edit';
 // Deployed Google Apps Script Web App URL
-let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'https://script.google.com/macros/s/AKfycbwB5ita8giiDRAKoQJeE_gVvJ24Hw5122fj_RF-4n2JCInu1qC5erTUEErrXl1X5_ektg/exec';
+let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'https://script.google.com/macros/s/AKfycbyLgvgOyrwRFutpurxnx4-_j_XaHjbZP6Vd4S_f_TAfwDUWmD38c0h4yLHjc7oTxuWIqQ/exec';
 localStorage.setItem('richcars_apps_script_url', GOOGLE_WEB_APP_URL);
 
 function escapeHtml(str) {
