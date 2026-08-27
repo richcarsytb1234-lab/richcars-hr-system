@@ -71,12 +71,6 @@ class AppState {
     this.activeUserId = this.load(KEYS.ACTIVE_USER, 'admin');
     this.activeTab = this.load(KEYS.ACTIVE_TAB, 'dashboard');
     this.authSession = this.load(KEYS.AUTH_SESSION, null);
-
-    // Ensure Master Admin always exists
-    if (!this.users.some(u => u.id === 'admin')) {
-      this.users.unshift(SEED_USERS[0]);
-      this.save();
-    }
   }
 
   load(key, fallback) {
@@ -265,6 +259,7 @@ class AppState {
   addEmployee(emp) {
     emp.id = 'emp_' + Date.now();
     emp.avatar = emp.role === 'manager' ? '👨‍💼' : '👨‍💻';
+    if (!emp.startDate) emp.startDate = getTodayStr(0);
     this.users.push(emp);
     this.save('ADD_EMPLOYEE', emp);
   }
@@ -345,6 +340,9 @@ class AppState {
       if (dayOfWeek === 0 || dayOfWeek === 6) continue; // 0=Sunday, 6=Saturday
 
       members.forEach(u => {
+        // ข้ามหากวันในอดีต (pastDate) เกิดก่อนวันที่พนักงานเข้าระบบ (startDate)
+        if (u.startDate && pastDate < u.startDate) return;
+
         const hasAtt = this.attendance.some(a => a.userId === u.id && a.date === pastDate);
         const hasApprovedLeave = this.leaveRequests.some(l => {
           if (l.userId !== u.id || l.status !== 'approved') return false;
@@ -2400,7 +2398,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`อัปเดตข้อมูล "${name}" เรียบร้อยแล้ว`);
       } else {
         // Create mode
-        state.addEmployee({ name, dept, role, empType, email, phone });
+        state.addEmployee({ name, dept, role, empType, email, phone, startDate: getTodayStr(0) });
         closeModal('empModal');
         renderApp();
         showToast(`เพิ่มพนักงาน "${name}" เข้าสู่ระบบสำเร็จ!`);
