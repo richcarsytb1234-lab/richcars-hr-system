@@ -430,11 +430,9 @@
                       <i class="fa-solid fa-map-location-dot" style="color: #ea4335;"></i> ดูบน Google Maps
                     </a>
 
-                    <!-- GPS Mode Selector (Real GPS vs Demo Simulator for easy testing) -->
+                    <!-- GPS Mode Selector (Real GPS) -->
                     <select id="gpsModeSelect" class="form-select" style="width: auto; font-size: 0.75rem; padding: 0.2rem 0.5rem;">
-                      <option value="real">📱 พิกัด GPS จริงจากมือถือ</option>
-                      <option value="demo_inside" selected>🟢 จำลอง: อยู่ในบริษัท (45 ม.)</option>
-                      <option value="demo_outside">🔴 จำลอง: อยู่นอกพื้นที่ (850 ม.)</option>
+                      <option value="real" selected>📱 พิกัด GPS จริงจากมือถือ</option>
                     </select>
                   </div>
                 </div>
@@ -938,7 +936,7 @@
               <div class="form-group">
                 <label>🔗 Google Apps Script Web App URL (หลังนำไป Deploy):</label>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <input type="text" id="settingAppsScriptUrl" class="form-input" value="https://script.google.com/macros/s/AKfycbwB5ita8giiDRAKoQJeE_gVvJ24Hw5122fj_RF-4n2JCInu1qC5erTUEErrXl1X5_ektg/exec" style="font-family: monospace; font-size: 0.82rem;">
+                  <input type="text" id="settingAppsScriptUrl" class="form-input" value="https://script.google.com/macros/s/AKfycbyLgvgOyrwRFutpurxnx4-_j_XaHjbZP6Vd4S_f_TAfwDUWmD38c0h4yLHjc7oTxuWIqQ/exec" style="font-family: monospace; font-size: 0.82rem;">
                   <button type="button" class="btn btn-rich-red btn-sm" id="btnSaveAppsScriptUrl" style="white-space: nowrap;"><i class="fa-solid fa-floppy-disk"></i> บันทึก URL</button>
                 </div>
                 <small style="color: var(--text-muted); display: block; margin-top: 0.4rem;">* ระบบเชื่อมต่อกับ Google Apps Script Web App เรียบร้อยแล้ว ข้อมูลจะถูกซิงค์เข้า Google Sheets โดยอัตโนมัติ</small>

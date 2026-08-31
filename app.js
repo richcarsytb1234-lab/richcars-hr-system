@@ -664,20 +664,10 @@ function rejectLeave(leaveId) {
 }
 
 // --- EMPLOYEE DASHBOARD ---
-function getTodayApprovedLeave(userId) {
-  const today = getTodayStr(0);
-  return state.leaveRequests.find(l => 
-    l.userId === userId && 
-    l.status === 'approved' && 
-    l.startDate && l.endDate && 
-    today >= l.startDate && today <= l.endDate
-  );
-}
-
 function renderEmployeeDashboard() {
   const activeUser = state.getActiveUser();
   const todayRec = state.attendance.find(a => a.userId === activeUser.id && a.date === getTodayStr(0));
-  const todayLeave = getTodayApprovedLeave(activeUser.id);
+  const todayLeave = state.getTodayApprovedLeave(activeUser.id);
   const rec = todayRec;
 
   // Dynamic Real-time Thai Date Display
@@ -1956,7 +1946,7 @@ function handleGeofencedClockAction(actionType) {
       } else if (err.code === 3) {
         errMsg = '⚠️ การดึงพิกัด GPS หมดเวลา (Timeout)';
       }
-      alert(errMsg + '\n\n💡 ทิป: สามารถเลือกโหมด "🟢 จำลอง: อยู่ในบริษัท" จากเมนูด้านล่างปุ่มเข้างานเพื่อทดสอบได้ทันที');
+      alert(errMsg);
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
