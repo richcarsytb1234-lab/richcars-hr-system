@@ -418,20 +418,29 @@ async function fetchAllFromGoogleSheet() {
   }
 }
 
-// 1.2 Full-screen loading overlay on app start
+// 1.2 Full-screen loading overlay on app start (Runs before login and on login)
 async function initAppWithLoading() {
   const overlay = document.getElementById('fullScreenLoadingOverlay');
-  if (overlay && state.isLoggedIn()) {
-    overlay.classList.remove('hidden');
+  const btnGoogle = document.getElementById('btnGoogleSignIn');
+
+  if (overlay) overlay.classList.remove('hidden');
+  if (btnGoogle) {
+    btnGoogle.disabled = true;
+    btnGoogle.style.opacity = '0.6';
+    btnGoogle.style.pointerEvents = 'none';
   }
+
   try {
-    if (state.isLoggedIn()) {
-      await fetchAllFromGoogleSheet();
-    }
+    await fetchAllFromGoogleSheet();
   } catch (err) {
     console.error('Init fetch error:', err);
   } finally {
     if (overlay) overlay.classList.add('hidden');
+    if (btnGoogle) {
+      btnGoogle.disabled = false;
+      btnGoogle.style.opacity = '';
+      btnGoogle.style.pointerEvents = '';
+    }
     renderApp();
   }
 }
@@ -2191,8 +2200,8 @@ function resetAllData() {
 // --- INITIALIZE EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
   initLiveClock();
-  renderApp();
   initThaiDateInputs();
+  initAppWithLoading();
 
   // Mobile Sidebar Toggle
   const sidebar = document.getElementById('appSidebar');
@@ -2669,6 +2678,12 @@ function initGoogleOAuth() {
 }
 
 function handleGoogleSignIn() {
+  const btnGoogle = document.getElementById('btnGoogleSignIn');
+  if (btnGoogle && btnGoogle.disabled) {
+    showToast('กำลังโหลดข้อมูลระบบ กรุณารอสักครู่...', 'info');
+    return;
+  }
+
   if (window.location.protocol === 'file:') {
     showToast('⚠️ กรุณาเข้าใช้งานผ่านเว็บจริงบน GitHub Pages เพื่อทดสอบ Google Login', 'warning', 5000);
     return;
