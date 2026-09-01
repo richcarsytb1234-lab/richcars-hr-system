@@ -479,6 +479,11 @@ function initLiveClock() {
 }
 
 function switchTab(tabId) {
+  const user = state.getActiveUser();
+  if (user && user.role !== 'manager' && (tabId === 'settings' || tabId === 'employees')) {
+    tabId = 'dashboard';
+  }
+
   state.activeTab = tabId;
   state.save();
 
@@ -2568,15 +2573,13 @@ function renderCommandPaletteResults(query) {
   const q = query.toLowerCase().trim();
 
   const allItems = [
-    // Navigation Tabs
+    // Navigation Tabs (พนักงานทั่วไป)
     { type: 'nav', id: 'dashboard', title: 'หน้าหลัก (Dashboard)', icon: 'fa-house', category: 'เมนูระบบ' },
-    { type: 'nav', id: 'employees', title: 'พนักงานทั้งหมด (Employees)', icon: 'fa-user-group', category: 'เมนูระบบ' },
     { type: 'nav', id: 'attendance', title: 'การเข้างาน & สรุปเวลาทำงาน (Attendance)', icon: 'fa-calendar-check', category: 'เมนูระบบ' },
     { type: 'nav', id: 'tasks', title: 'การจัดการงาน (Tasks)', icon: 'fa-list-check', category: 'เมนูระบบ' },
     { type: 'nav', id: 'leave', title: 'การลางาน (Leave Requests)', icon: 'fa-envelope-open-text', category: 'เมนูระบบ' },
     { type: 'nav', id: 'calendar', title: 'ปฏิทินบริษัท (Calendar)', icon: 'fa-calendar-days', category: 'เมนูระบบ' },
     { type: 'nav', id: 'announcements', title: 'ประกาศข่าวสาร (Announcements)', icon: 'fa-bullhorn', category: 'เมนูระบบ' },
-    { type: 'nav', id: 'settings', title: 'ตั้งค่าระบบ (Settings)', icon: 'fa-gear', category: 'เมนูระบบ' },
 
     // Quick Actions
     { type: 'action', action: 'clockIn', title: '🟢 ลงเวลาเข้างาน (Clock In)', icon: 'fa-arrow-right-to-bracket', category: 'คำสั่งด่วน' },
@@ -2584,6 +2587,14 @@ function renderCommandPaletteResults(query) {
     { type: 'action', action: 'submitLeave', title: '📝 ยื่นใบลาป่วย / ลากิจใหม่', icon: 'fa-paper-plane', category: 'คำสั่งด่วน' },
     { type: 'action', action: 'toggleTheme', title: '🌓 สลับโหมดมืด / สว่าง (Dark/Light)', icon: 'fa-moon', category: 'คำสั่งด่วน' },
   ];
+
+  // เมนูเฉพาะผู้ดูแลระบบ (Admin / Manager)
+  if (state.getActiveUser().role === 'manager') {
+    allItems.push(
+      { type: 'nav', id: 'employees', title: 'จัดการพนักงาน (Employees)', icon: 'fa-user-group', category: 'ผู้ดูแลระบบ' },
+      { type: 'nav', id: 'settings', title: 'ตั้งค่าระบบ (Settings)', icon: 'fa-gear', category: 'ผู้ดูแลระบบ' }
+    );
+  }
 
   // Add Employees to search items
   state.users.forEach(u => {
