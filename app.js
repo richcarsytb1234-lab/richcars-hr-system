@@ -4,11 +4,10 @@
 
 // --- SEED MOCK DATA & GOOGLE INTEGRATION CONFIG ---
 const SECRET_KEY = 'rc-hr-8f3a9c2e1b7d4f6a0e5c8b2d9f1a3e7c';
-const ALLOWED_EMAIL_DOMAIN = 'richcars.com';
 const GOOGLE_CLIENT_ID = '392272628661-jgt4jlgc7abvajk3e4983vpljuvv8nlt.apps.googleusercontent.com';
 const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1fkWEILHaTxSJ3qpyGMPW4ot69sLGLEyRvcINxz5HG0Y/edit';
 // Deployed Google Apps Script Web App URL
-let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'https://script.google.com/macros/s/AKfycbwB5ita8giiDRAKoQJeE_gVvJ24Hw5122fj_RF-4n2JCInu1qC5erTUEErrXl1X5_ektg/exec';
+let GOOGLE_WEB_APP_URL = localStorage.getItem('richcars_apps_script_url') || 'https://script.google.com/macros/s/AKfycbyLgvgOyrwRFutpurxnx4-_j_XaHjbZP6Vd4S_f_TAfwDUWmD38c0h4yLHjc7oTxuWIqQ/exec';
 localStorage.setItem('richcars_apps_script_url', GOOGLE_WEB_APP_URL);
 
 function escapeHtml(str) {
@@ -72,12 +71,6 @@ class AppState {
     this.activeUserId = this.load(KEYS.ACTIVE_USER, 'admin');
     this.activeTab = this.load(KEYS.ACTIVE_TAB, 'dashboard');
     this.authSession = this.load(KEYS.AUTH_SESSION, null);
-
-    // Ensure Master Admin always exists
-    if (!this.users.some(u => u.id === 'admin')) {
-      this.users.unshift(SEED_USERS[0]);
-      this.save();
-    }
   }
 
   load(key, fallback) {
@@ -106,11 +99,12 @@ class AppState {
   async postToGoogleScript(action, payload) {
     try {
       if (!GOOGLE_WEB_APP_URL) return;
+      const requesterEmail = (this.authSession && this.authSession.email) ? this.authSession.email : null;
       await fetch(GOOGLE_WEB_APP_URL, {
         method: 'POST',
         mode: 'no-cors', // Apps Script web app CORS mode
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: SECRET_KEY, action, payload })
+        body: JSON.stringify({ key: SECRET_KEY, action, payload, requesterEmail })
       });
     } catch (e) {
       console.warn('Google Sheets sync background status:', e);
@@ -265,6 +259,7 @@ class AppState {
   addEmployee(emp) {
     emp.id = 'emp_' + Date.now();
     emp.avatar = emp.role === 'manager' ? '👨‍💼' : '👨‍💻';
+    if (!emp.startDate) emp.startDate = getTodayStr(0);
     this.users.push(emp);
     this.save('ADD_EMPLOYEE', emp);
   }
@@ -345,6 +340,9 @@ class AppState {
       if (dayOfWeek === 0 || dayOfWeek === 6) continue; // 0=Sunday, 6=Saturday
 
       members.forEach(u => {
+        // ข้ามหากวันในอดีต (pastDate) เกิดก่อนวันที่พนักงานเข้าระบบ (startDate)
+        if (u.startDate && pastDate < u.startDate) return;
+
         const hasAtt = this.attendance.some(a => a.userId === u.id && a.date === pastDate);
         const hasApprovedLeave = this.leaveRequests.some(l => {
           if (l.userId !== u.id || l.status !== 'approved') return false;
@@ -420,20 +418,29 @@ async function fetchAllFromGoogleSheet() {
   }
 }
 
-// 1.2 Full-screen loading overlay on app start
+// 1.2 Full-screen loading overlay on app start (Runs before login and on login)
 async function initAppWithLoading() {
   const overlay = document.getElementById('fullScreenLoadingOverlay');
-  if (overlay && state.isLoggedIn()) {
-    overlay.classList.remove('hidden');
+  const btnGoogle = document.getElementById('btnGoogleSignIn');
+
+  if (overlay) overlay.classList.remove('hidden');
+  if (btnGoogle) {
+    btnGoogle.disabled = true;
+    btnGoogle.style.opacity = '0.6';
+    btnGoogle.style.pointerEvents = 'none';
   }
+
   try {
-    if (state.isLoggedIn()) {
-      await fetchAllFromGoogleSheet();
-    }
+    await fetchAllFromGoogleSheet();
   } catch (err) {
     console.error('Init fetch error:', err);
   } finally {
     if (overlay) overlay.classList.add('hidden');
+    if (btnGoogle) {
+      btnGoogle.disabled = false;
+      btnGoogle.style.opacity = '';
+      btnGoogle.style.pointerEvents = '';
+    }
     renderApp();
   }
 }
@@ -472,6 +479,11 @@ function initLiveClock() {
 }
 
 function switchTab(tabId) {
+  const user = state.getActiveUser();
+  if (user && user.role !== 'manager' && (tabId === 'settings' || tabId === 'employees')) {
+    tabId = 'dashboard';
+  }
+
   state.activeTab = tabId;
   state.save();
 
@@ -666,20 +678,10 @@ function rejectLeave(leaveId) {
 }
 
 // --- EMPLOYEE DASHBOARD ---
-function getTodayApprovedLeave(userId) {
-  const today = getTodayStr(0);
-  return state.leaveRequests.find(l => 
-    l.userId === userId && 
-    l.status === 'approved' && 
-    l.startDate && l.endDate && 
-    today >= l.startDate && today <= l.endDate
-  );
-}
-
 function renderEmployeeDashboard() {
   const activeUser = state.getActiveUser();
   const todayRec = state.attendance.find(a => a.userId === activeUser.id && a.date === getTodayStr(0));
-  const todayLeave = getTodayApprovedLeave(activeUser.id);
+  const todayLeave = state.getTodayApprovedLeave(activeUser.id);
   const rec = todayRec;
 
   // Dynamic Real-time Thai Date Display
@@ -1571,7 +1573,11 @@ function exportAdminAttendanceSummaryCSV() {
       }
     });
 
-    csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
+    let empTypeLabel = 'Office';
+    if (user.empType === 'wfh') empTypeLabel = 'WFH';
+    else if (user.empType === 'parttime') empTypeLabel = 'Part-Time';
+
+    csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}","${empTypeLabel}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1958,7 +1964,7 @@ function handleGeofencedClockAction(actionType) {
       } else if (err.code === 3) {
         errMsg = '⚠️ การดึงพิกัด GPS หมดเวลา (Timeout)';
       }
-      alert(errMsg + '\n\n💡 ทิป: สามารถเลือกโหมด "🟢 จำลอง: อยู่ในบริษัท" จากเมนูด้านล่างปุ่มเข้างานเพื่อทดสอบได้ทันที');
+      alert(errMsg);
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
@@ -2203,8 +2209,8 @@ function resetAllData() {
 // --- INITIALIZE EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
   initLiveClock();
-  renderApp();
   initThaiDateInputs();
+  initAppWithLoading();
 
   // Mobile Sidebar Toggle
   const sidebar = document.getElementById('appSidebar');
@@ -2400,7 +2406,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`อัปเดตข้อมูล "${name}" เรียบร้อยแล้ว`);
       } else {
         // Create mode
-        state.addEmployee({ name, dept, role, empType, email, phone });
+        state.addEmployee({ name, dept, role, empType, email, phone, startDate: getTodayStr(0) });
         closeModal('empModal');
         renderApp();
         showToast(`เพิ่มพนักงาน "${name}" เข้าสู่ระบบสำเร็จ!`);
@@ -2567,15 +2573,13 @@ function renderCommandPaletteResults(query) {
   const q = query.toLowerCase().trim();
 
   const allItems = [
-    // Navigation Tabs
+    // Navigation Tabs (พนักงานทั่วไป)
     { type: 'nav', id: 'dashboard', title: 'หน้าหลัก (Dashboard)', icon: 'fa-house', category: 'เมนูระบบ' },
-    { type: 'nav', id: 'employees', title: 'พนักงานทั้งหมด (Employees)', icon: 'fa-user-group', category: 'เมนูระบบ' },
     { type: 'nav', id: 'attendance', title: 'การเข้างาน & สรุปเวลาทำงาน (Attendance)', icon: 'fa-calendar-check', category: 'เมนูระบบ' },
     { type: 'nav', id: 'tasks', title: 'การจัดการงาน (Tasks)', icon: 'fa-list-check', category: 'เมนูระบบ' },
     { type: 'nav', id: 'leave', title: 'การลางาน (Leave Requests)', icon: 'fa-envelope-open-text', category: 'เมนูระบบ' },
     { type: 'nav', id: 'calendar', title: 'ปฏิทินบริษัท (Calendar)', icon: 'fa-calendar-days', category: 'เมนูระบบ' },
     { type: 'nav', id: 'announcements', title: 'ประกาศข่าวสาร (Announcements)', icon: 'fa-bullhorn', category: 'เมนูระบบ' },
-    { type: 'nav', id: 'settings', title: 'ตั้งค่าระบบ (Settings)', icon: 'fa-gear', category: 'เมนูระบบ' },
 
     // Quick Actions
     { type: 'action', action: 'clockIn', title: '🟢 ลงเวลาเข้างาน (Clock In)', icon: 'fa-arrow-right-to-bracket', category: 'คำสั่งด่วน' },
@@ -2583,6 +2587,14 @@ function renderCommandPaletteResults(query) {
     { type: 'action', action: 'submitLeave', title: '📝 ยื่นใบลาป่วย / ลากิจใหม่', icon: 'fa-paper-plane', category: 'คำสั่งด่วน' },
     { type: 'action', action: 'toggleTheme', title: '🌓 สลับโหมดมืด / สว่าง (Dark/Light)', icon: 'fa-moon', category: 'คำสั่งด่วน' },
   ];
+
+  // เมนูเฉพาะผู้ดูแลระบบ (Admin / Manager)
+  if (state.getActiveUser().role === 'manager') {
+    allItems.push(
+      { type: 'nav', id: 'employees', title: 'จัดการพนักงาน (Employees)', icon: 'fa-user-group', category: 'ผู้ดูแลระบบ' },
+      { type: 'nav', id: 'settings', title: 'ตั้งค่าระบบ (Settings)', icon: 'fa-gear', category: 'ผู้ดูแลระบบ' }
+    );
+  }
 
   // Add Employees to search items
   state.users.forEach(u => {
@@ -2681,6 +2693,12 @@ function initGoogleOAuth() {
 }
 
 function handleGoogleSignIn() {
+  const btnGoogle = document.getElementById('btnGoogleSignIn');
+  if (btnGoogle && btnGoogle.disabled) {
+    showToast('กำลังโหลดข้อมูลระบบ กรุณารอสักครู่...', 'info');
+    return;
+  }
+
   if (window.location.protocol === 'file:') {
     showToast('⚠️ กรุณาเข้าใช้งานผ่านเว็บจริงบน GitHub Pages เพื่อทดสอบ Google Login', 'warning', 5000);
     return;
@@ -2741,36 +2759,16 @@ function handleGoogleLoginResponse(response) {
 }
 
 function processGoogleUserLogin(googleEmail, googleName, googlePicture) {
-  const email = googleEmail.toLowerCase();
+  const email = (googleEmail || '').trim().toLowerCase();
   
-  if (!email.endsWith('@' + ALLOWED_EMAIL_DOMAIN)) {
-    showToast(`⚠️ อีเมลนี้ (${email}) ไม่ได้อยู่ในโดเมนบริษัท (@${ALLOWED_EMAIL_DOMAIN}) กรุณาติดต่อฝ่าย HR`, 'error', 5000);
-    return;
-  }
-
-  let user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+  const user = state.users.find(u => u.email && u.email.trim().toLowerCase() === email);
   
   if (user) {
     showToast(`🔑 เข้าสู่ระบบด้วย Google สำเร็จ: ${user.name}`);
     state.setAuthSession(user);
     initAppWithLoading();
   } else {
-    const displayName = googleName || email.split('@')[0];
-    const newEmp = {
-      id: 'emp_' + Date.now(),
-      name: displayName,
-      email: email,
-      role: 'member',
-      avatar: '👤',
-      dept: 'พนักงานทั่วไป',
-      phone: '-',
-      empType: 'office'
-    };
-    state.users.push(newEmp);
-    state.save('ADD_EMPLOYEE', newEmp);
-    showToast(`🎉 ต้อนรับพนักงานใหม่: ${displayName}`);
-    state.setAuthSession(newEmp);
-    initAppWithLoading();
+    showToast('อีเมลนี้ยังไม่ได้ลงทะเบียนในระบบ กรุณาติดต่อฝ่าย HR เพื่อเพิ่มชื่อของคุณก่อนเข้าใช้งาน', 'error', 5000);
   }
 }
 
