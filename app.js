@@ -1568,7 +1568,11 @@ function exportAdminAttendanceSummaryCSV() {
       }
     });
 
-    csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
+    let empTypeLabel = 'Office';
+    if (user.empType === 'wfh') empTypeLabel = 'WFH';
+    else if (user.empType === 'parttime') empTypeLabel = 'Part-Time';
+
+    csvContent += `"${user.name}","${user.dept || 'ทั่วไป'}","${empTypeLabel}",${presentDays},${lateCount},${lateMin},${userLeaves.length},${absentDays},${totalWorkHours.toFixed(1)},${otHours.toFixed(1)}\n`;
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
