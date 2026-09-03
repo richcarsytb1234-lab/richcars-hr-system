@@ -1,3 +1,4 @@
+console.log('RICHCARS App Version: v1 - Build ' + new Date().toISOString());
 /* ==========================================================================
    RICHCARS - Core Logic & Data Management (Interactive Calendar Version)
    ========================================================================== */
